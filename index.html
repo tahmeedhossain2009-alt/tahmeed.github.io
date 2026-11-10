@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Glass Notes</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#070604">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+:root{--ink:#070604;--mist:#f4ecd8;--dim:rgba(244,236,216,.58);--glass:rgba(255,226,160,.08);--line:rgba(255,215,130,.22);--o1:#d9a21b;--o2:#8f5f08;--o3:#ffd76a;--p1:.5;--p2:.6;--p3:.22;--g1:rgba(217,162,27,.28);--g2:rgba(143,95,8,.3);--rail:rgba(7,6,4,.45);--serif:Georgia,"Palatino Linotype",serif;--sans:system-ui,-apple-system,"Segoe UI",sans-serif}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{background:var(--ink);color:var(--mist);font-family:var(--sans);overflow-x:hidden}
+.orb{position:fixed;border-radius:50%;filter:blur(70px);opacity:.55;z-index:0;animation:drift 26s ease-in-out infinite alternate}
+.o1{width:60vmax;height:60vmax;background:var(--o1);top:-22vmax;left:-16vmax;opacity:var(--p1)}
+.o2{width:46vmax;height:46vmax;background:var(--o2);bottom:-18vmax;right:-14vmax;animation-delay:-9s;opacity:var(--p2)}
+.o3{width:30vmax;height:30vmax;background:var(--o3);top:42%;left:42%;opacity:var(--p3);animation-delay:-16s}
+@keyframes drift{to{transform:translate(8vmax,6vmax) scale(1.12)}}
+@media (prefers-reduced-motion:reduce){.orb{animation:none}}
+#root{position:relative;z-index:1;min-height:100%}
+.glass{background:var(--glass);backdrop-filter:blur(20px) saturate(150%);-webkit-backdrop-filter:blur(20px) saturate(150%);border:1px solid var(--line);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 10px 30px rgba(0,0,0,.25)}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0}
+:focus-visible{outline:2px solid #fff;outline-offset:2px}
+
+/* sign in */
+.auth{min-height:100vh;display:grid;place-items:center;padding:24px}
+.auth .card{width:min(380px,100%);padding:40px 28px;border-radius:36px 8px 36px 8px;text-align:left}
+.auth h1{font:italic 400 3.2rem/1 var(--serif);letter-spacing:-.03em;margin-bottom:12px}
+.auth p{color:var(--dim);line-height:1.5;margin-bottom:28px}
+.btn{display:block;width:100%;padding:13px 18px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid var(--line);text-align:center;transition:background .2s}
+.btn:hover{background:rgba(255,255,255,.2)}
+.btn.solid{background:var(--mist);color:var(--ink);border-color:var(--mist)}
+.hint{font-size:.8rem;color:var(--dim);margin-top:14px;line-height:1.4}
+
+/* app */
+.app{display:grid;grid-template-columns:52px 1fr;min-height:100vh;padding-top:env(safe-area-inset-top)}
+.rail{position:sticky;top:0;height:100vh;padding:18px 0;display:flex;flex-direction:column;align-items:center;gap:6px;overflow-y:auto;border-right:1px solid var(--line);background:var(--rail);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.rail button{writing-mode:vertical-rl;transform:rotate(180deg);padding:14px 8px;border-radius:999px;font:italic 1.05rem var(--serif);color:var(--dim);white-space:nowrap;max-height:160px;overflow:hidden;text-overflow:ellipsis;transition:all .2s}
+.rail button.on{color:var(--ink);background:var(--mist)}
+.rail .add{font:300 1.4rem var(--sans);writing-mode:horizontal-tb;transform:none;padding:6px 10px;margin-top:auto}
+.main{padding:26px 18px 120px 20px;min-width:0}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:26px}
+.top h2{font:italic 400 2.4rem/1.05 var(--serif);letter-spacing:-.02em}
+.top small{display:block;color:var(--dim);margin-top:6px}
+.out{font-size:.8rem;color:var(--dim);padding:6px 4px}
+.cols{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:12px}
+.note{display:flex;flex-direction:column;aspect-ratio:1/1;width:100%;text-align:left;padding:12px;border-radius:18px;overflow:hidden;transition:transform .2s}
+.note:active{transform:scale(.96)}
+.note h3{font:italic 400 1rem/1.2 var(--serif);margin-bottom:6px;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.note p{color:var(--dim);font-size:.78rem;line-height:1.35;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap;overflow-wrap:anywhere}
+.note .meta{margin-top:auto;padding-top:6px;font-size:.66rem;color:var(--dim)}
+.note.locked p{filter:blur(6px);user-select:none}
+.empty{color:var(--dim);line-height:1.6;max-width:26ch;margin-top:10vh}
+.fab{position:fixed;right:20px;bottom:calc(22px + env(safe-area-inset-bottom));width:62px;height:62px;border-radius:50%;font:200 2.2rem/1 var(--sans);z-index:5}
+
+/* sheet + modal */
+.veil{position:fixed;inset:0;z-index:10;background:rgba(5,5,10,.5);display:flex;align-items:flex-end;justify-content:center}
+.veil.mid{align-items:center;padding:20px}
+.sheet{width:min(560px,100%);max-height:92vh;overflow:auto;padding:22px 20px calc(20px + env(safe-area-inset-bottom));border-radius:30px 30px 0 0;display:flex;flex-direction:column;gap:12px;animation:up .28s ease-out}
+.veil.mid .sheet{border-radius:28px 6px 28px 6px;animation:none}
+@keyframes up{from{transform:translateY(30px);opacity:0}}
+.sheet input,.sheet textarea,.sheet select{width:100%;background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:16px;padding:12px 14px;outline:none}
+.sheet select option{color:#111}
+.sheet input.t{font:italic 1.5rem var(--serif);border:0;background:none;padding:6px 2px}
+.sheet textarea{min-height:36vh;resize:vertical;line-height:1.5}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.row .btn{width:auto;flex:1}
+.chip{padding:9px 14px;border-radius:999px;border:1px solid var(--line);font-size:.85rem}
+.chip.on{background:var(--mist);color:var(--ink)}
+.danger{color:#ff9aa8}
+.toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%);z-index:20;padding:10px 18px;border-radius:999px;font-size:.9rem}
+.avatar{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;flex:none;padding:0}
+.avatar svg{width:22px;height:22px}
+.theme{flex:1;display:flex;flex-direction:column;align-items:center;gap:10px;padding:14px 10px;border-radius:18px;border:1px solid var(--line);font-size:.9rem;transition:background .2s}
+.theme.on{border-color:var(--mist);background:rgba(255,255,255,.12)}
+.sw{width:46px;height:46px;border-radius:14px;border:1px solid var(--line)}
+body[data-theme="black"]{--ink:#000;--mist:#fff;--dim:rgba(255,255,255,.6);--glass:rgba(255,255,255,.06);--line:rgba(255,255,255,.18)}
+body[data-theme="black"] .orb{display:none}
+body[data-theme="black"] .rail{background:#000}
+.veil.full{align-items:stretch;background:radial-gradient(circle at 15% 0%,var(--g1),transparent 55%),radial-gradient(circle at 100% 100%,var(--g2),transparent 50%),var(--ink)}
+body[data-theme="black"] .veil.full{background:#000}
+.veil.full .sheet{width:100%;max-width:none;height:100%;max-height:100%;border-radius:0;border:0;box-shadow:none;background:none;backdrop-filter:none;-webkit-backdrop-filter:none;overflow:hidden;padding:calc(14px + env(safe-area-inset-top)) 18px calc(14px + env(safe-area-inset-bottom));animation:none}
+.veil.full .sheet textarea{flex:1;min-height:0;resize:none;border:0;background:none;border-radius:0;padding:6px 2px;font-size:1.02rem;line-height:1.65}
+.veil.full .sheet textarea:focus{outline:none}
+.search{display:flex;align-items:center;gap:10px;padding:11px 16px;border-radius:999px;margin-bottom:22px}
+.search svg{width:18px;height:18px;flex:none;color:var(--dim)}
+.search input{flex:1;min-width:0;background:none;border:0;outline:none}
+.search input::placeholder{color:var(--dim)}
+mark{background:rgba(255,215,106,.38);color:inherit;border-radius:4px;padding:0 2px}
+.vrow{display:flex;gap:10px;flex-wrap:nowrap}
+.mic-dot{color:#ff6b6b}
+.themes{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.theme{text-align:center;line-height:1.25}
+body[data-theme="gray"]{--ink:#08090a;--mist:#eeeff1;--dim:rgba(238,239,241,.58);--glass:rgba(210,214,222,.08);--line:rgba(220,224,232,.2);--o1:#8b8f98;--o2:#4a4e57;--o3:#c9ccd3;--p1:.42;--p2:.55;--p3:.2;--g1:rgba(139,143,152,.28);--g2:rgba(74,78,87,.35);--rail:rgba(8,9,10,.5)}
+body[data-theme="white"]{--ink:#050505;--mist:#ffffff;--dim:rgba(255,255,255,.62);--glass:rgba(255,255,255,.1);--line:rgba(255,255,255,.28);--o1:#ffffff;--o2:#b9b9b9;--o3:#6e6e6e;--p1:.24;--p2:.3;--p3:.3;--g1:rgba(255,255,255,.18);--g2:rgba(180,180,180,.2);--rail:rgba(5,5,5,.5)}
+body[data-theme="blue"]{--ink:#02050c;--mist:#e8f0ff;--dim:rgba(232,240,255,.6);--glass:rgba(120,170,255,.08);--line:rgba(130,180,255,.25);--o1:#1f5bff;--o2:#0a2a8a;--o3:#4db2ff;--p1:.5;--p2:.65;--p3:.24;--g1:rgba(31,91,255,.3);--g2:rgba(10,42,138,.4);--rail:rgba(2,5,12,.5)}
+body[data-theme="wood"]{--ink:#1a0f08;--mist:#fff8ef;--dim:rgba(255,248,239,.65);--glass:rgba(255,255,255,.12);--line:rgba(255,255,255,.3);--o1:#a8743f;--o2:#5c3a1e;--o3:#d8aa72;--p1:.55;--p2:.7;--p3:.28;--g1:rgba(168,116,63,.35);--g2:rgba(92,58,30,.45);--rail:rgba(26,15,8,.5)}
+</style>
+</head>
+<body>
+<div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div>
+<div id="root"></div>
+<script>
+// ====== SETTING ======
+// Google sign-in: paste your Google Client ID here (see guide). Empty = guest mode only.
+const GOOGLE_CLIENT_ID = "";
+// =====================
+
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => Math.random().toString(36).slice(2, 10);
+const root = $('#root');
+let user = null, data = { groups: [], notes: [] }, active = 'all', query = '';
+
+const store = {
+  get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } },
+  set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){ toast('Storage full or blocked'); } }
+};
+const save = () => store.set('gn:data:' + user.id, data);
+
+function toast(msg){
+  const t = document.createElement('div');
+  t.className = 'toast glass'; t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 2200);
+}
+
+// ---- encryption (AES-GCM, key from password) ----
+const enc = new TextEncoder(), dec = new TextDecoder();
+const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+async function keyFrom(pw, salt){
+  const m = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name:'PBKDF2', salt, iterations:100000, hash:'SHA-256' }, m, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']);
+}
+async function lockText(obj, pw){
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, await keyFrom(pw, salt), enc.encode(JSON.stringify(obj)));
+  return { s: b64(salt), i: b64(iv), c: b64(ct) };
+}
+async function unlockText(l, pw){
+  const pt = await crypto.subtle.decrypt({ name:'AES-GCM', iv: unb64(l.i) }, await keyFrom(pw, unb64(l.s)), unb64(l.c));
+  return JSON.parse(dec.decode(pt));
+}
+
+// ---- small dialogs ----
+function ask(title, { password = false, placeholder = '', ok = 'Continue' } = {}){
+  return new Promise(res => {
+    const v = document.createElement('div');
+    v.className = 'veil mid';
+    v.innerHTML = `<div class="sheet glass"><h3 style="font:italic 1.5rem var(--serif)">${esc(title)}</h3>
+      <input type="${password ? 'password' : 'text'}" placeholder="${esc(placeholder)}" autocomplete="off">
+      <div class="row"><button class="btn" data-x>Cancel</button><button class="btn solid" data-ok>${esc(ok)}</button></div></div>`;
+    document.body.appendChild(v);
+    const inp = $('input', v); inp.focus();
+    const done = val => { v.remove(); res(val); };
+    $('[data-x]', v).onclick = () => done(null);
+    $('[data-ok]', v).onclick = () => done(inp.value);
+    inp.onkeydown = e => { if (e.key === 'Enter') done(inp.value); };
+  });
+}
+
+// ---- sign in ----
+function login(u){
+  user = u; store.set('gn:session', u);
+  data = store.get('gn:data:' + u.id) || { groups: [], notes: [] };
+  data.trash = (data.trash || []).filter(t => Date.now() - t.at < 30 * 864e5);
+  renderApp();
+}
+function logout(){ localStorage.removeItem('gn:session'); user = null; renderAuth(); }
+
+function renderAuth(){
+  const cid = GOOGLE_CLIENT_ID || store.get('gn:cid') || '';
+  const isFile = location.protocol === 'file:';
+  root.innerHTML = `<div class="auth"><div class="card glass">
+    <h1>glass</h1>
+    <p>Quiet notes, sorted into groups, each one lockable with its own password.</p>
+    <div id="gbtn" style="margin-bottom:12px;min-height:44px"><button class="btn" id="gfake">Continue with Google</button></div>
+    <button class="btn solid" id="guest">Continue as guest</button>
+    <p class="hint">${!cid ? 'Google sign-in needs a Client ID. Tap the Google button to add it.' : isFile ? 'Google sign-in only works from a hosted https link, not from a file on your PC.' : 'Notes stay on this device, tied to your Google account.'}</p>
+  </div></div>`;
+  $('#guest').onclick = () => login({ id: 'guest', name: 'Guest' });
+  $('#gfake').onclick = async () => {
+    if (cid) return toast(isFile ? 'Open the hosted https link to use Google sign-in' : 'Google is still loading. Try again in a moment.');
+    const v = (await ask('Paste your Google Client ID', { placeholder: '123-abc.apps.googleusercontent.com', ok: 'Save' }) || '').trim();
+    if (!v) return;
+    if (!/\.apps\.googleusercontent\.com$/.test(v)) return toast('That does not look like a Client ID');
+    store.set('gn:cid', v); renderAuth();
+  };
+  if (!cid || isFile) return;
+  let tries = 0;
+  const t = setInterval(() => {
+    if (window.google && google.accounts) {
+      clearInterval(t);
+      google.accounts.id.initialize({ client_id: cid, callback: r => {
+        try {
+          const p = JSON.parse(decodeURIComponent(escape(atob(r.credential.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')))));
+          login({ id: p.sub, name: p.name || p.email, email: p.email });
+        } catch(e){ toast('Sign-in failed. Try again.'); }
+      }});
+      $('#gbtn').innerHTML = '';
+      google.accounts.id.renderButton($('#gbtn'), { theme:'filled_black', shape:'pill', size:'large', text:'continue_with' });
+    } else if (++tries > 40) { clearInterval(t); toast('Could not reach Google. Check your internet.'); }
+  }, 150);
+}
+
+// ---- search (finds any word inside notes) ----
+const norm = t => String(t).toLowerCase().normalize('NFC');
+const words = t => norm(t).split(/[^\p{L}\p{M}\p{N}]+/u).filter(Boolean);
+const escRe = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function near(a, b){ // true if the words differ by at most one letter
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0, j = 0, e = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++e > 1) return false;
+    if (a.length > b.length) i++; else if (a.length < b.length) j++; else { i++; j++; }
+  }
+  return e + (a.length - i) + (b.length - j) <= 1;
+}
+function score(n, ts){
+  const ti = norm(n.title), bo = norm(n.body), all = words(n.title + ' ' + n.body);
+  let sc = 0;
+  for (const t of ts) {
+    let s = 0;
+    if (ti.includes(t)) s += 5;
+    if (bo.includes(t)) s += 3;
+    if (!s && t.length >= 4 && all.some(w => w.length >= 4 && near(t, w))) s = 1;
+    if (!s) return 0;
+    sc += s;
+  }
+  return sc;
+}
+function hl(raw, ts){
+  if (!ts.length) return esc(raw);
+  const rx = new RegExp('(' + ts.map(escRe).join('|') + ')', 'gi');
+  return raw.split(rx).map((p, i) => i % 2 ? '<mark>' + esc(p) + '</mark>' : esc(p)).join('');
+}
+function snippet(body, ts){
+  const m = new RegExp(ts.map(escRe).join('|'), 'i').exec(body);
+  const st = m ? Math.max(0, m.index - 25) : 0;
+  return hl((st ? '…' : '') + body.slice(st, st + 110), ts);
+}
+function tile(n, ts){
+  const g = data.groups.find(x => x.id === n.gid);
+  const title = n.lock ? 'Locked note' : (ts.length ? hl(n.title || 'Untitled', ts) : esc(n.title || 'Untitled'));
+  const text = n.lock ? 'Hidden until unlocked' : (ts.length ? snippet(n.body, ts) : esc(n.body));
+  return `<button class="note glass ${n.lock ? 'locked' : ''}" data-n="${n.id}"><h3>${title}</h3><p>${text}</p>
+    <div class="meta">${new Date(n.ts).toLocaleDateString()}${g ? ' · ' + esc(g.name) : ''}${n.lock ? ' · locked' : ''}</div></button>`;
+}
+
+// ---- main screen ----
+function renderApp(){
+  const list = data.notes.filter(n => active === 'all' || n.gid === active).sort((a,b) => b.ts - a.ts);
+  const g = data.groups.find(x => x.id === active);
+  const first = (user.name || '').split(' ')[0];
+  root.innerHTML = `<div class="app">
+    <nav class="rail">
+      <button data-g="all" class="${active==='all'?'on':''}">all notes</button>
+      ${data.groups.map(x => `<button data-g="${x.id}" class="${active===x.id?'on':''}">${esc(x.name)}</button>`).join('')}
+      <button class="add" id="addg" aria-label="New group">+</button>
+    </nav>
+    <main class="main">
+      <div class="top"><div><h2>${g ? esc(g.name) : 'welcome achiever'}</h2>
+        <small>${list.length} ${list.length === 1 ? 'note' : 'notes'}${g ? ' · <button id="delg" class="danger" style="font-size:inherit">delete group</button>' : ''}</small></div>
+        <button class="avatar glass" id="prof" aria-label="Profile and appearance"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="8.5" r="3.6"/><path d="M4.8 20c.9-3.6 3.7-5.4 7.2-5.4s6.3 1.8 7.2 5.4"/></svg></button></div>
+      <label class="search glass"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
+        <input id="q" type="search" placeholder="Search any word inside your notes" value="${esc(query)}" autocomplete="off"></label>
+      <div id="res"></div>
+    </main>
+    <button class="fab glass" id="new" aria-label="New note">+</button>
+  </div>`;
+  root.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { active = b.dataset.g; renderApp(); });
+  $('#addg').onclick = async () => {
+    const name = (await ask('Name the group', { placeholder: 'e.g. Ideas', ok: 'Create' }) || '').trim();
+    if (!name) return;
+    const x = { id: uid(), name }; data.groups.push(x); active = x.id; save(); renderApp();
+  };
+  const dg = $('#delg');
+  if (dg) dg.onclick = () => {
+    if (!confirm('Delete this group? Its notes will stay, without a group.')) return;
+    data.notes.forEach(n => { if (n.gid === active) n.gid = ''; });
+    data.groups = data.groups.filter(x => x.id !== active); active = 'all'; save(); renderApp();
+  };
+  $('#prof').onclick = openProfile;
+  $('#new').onclick = () => openEditor({ id: null, title: '', body: '', gid: active === 'all' ? '' : active, locked: false, pw: null });
+  const paint = () => {
+    const ts = words(query), locked = data.notes.filter(n => n.lock).length;
+    const items = ts.length
+      ? data.notes.filter(n => !n.lock).map(n => ({ n, s: score(n, ts) })).filter(x => x.s).sort((x, y) => y.s - x.s || y.n.ts - x.n.ts).map(x => x.n)
+      : list;
+    const note = ts.length && locked ? '<p class="hint">Locked notes are not searched.</p>' : '';
+    $('#res').innerHTML = items.length
+      ? `<div class="cols">${items.map(n => tile(n, ts)).join('')}</div>${note}`
+      : ts.length ? `<p class="empty">No note contains “${esc(query)}”.</p>${note}`
+      : `<p class="empty">Nothing here yet. Tap the circle to write your first note.</p>`;
+    $('#res').querySelectorAll('[data-n]').forEach(b => b.onclick = () => openNote(b.dataset.n));
+  };
+  $('#q').oninput = e => { query = e.target.value; paint(); };
+  paint();
+}
+
+const THEMES = [
+  { id: 'black', name: 'Black', sw: '#000' },
+  { id: 'gold', name: 'Golden glass', sw: 'linear-gradient(135deg,#d9a21b,#070604 70%)' },
+  { id: 'gray', name: 'Black &amp; gray glass', sw: 'linear-gradient(135deg,#9aa0aa,#08090a 70%)' },
+  { id: 'white', name: 'Black &amp; white glass', sw: 'linear-gradient(135deg,#ffffff,#050505 70%)' },
+  { id: 'blue', name: 'Blue &amp; black glass', sw: 'linear-gradient(135deg,#2f6bff,#02050c 70%)' },
+  { id: 'wood', name: 'Wood &amp; white glass', sw: 'linear-gradient(135deg,#a8743f,#3a2415 60%,#fff8ef)' }
+];
+function toastUndo(msg, fn){
+  const t = document.createElement('div');
+  t.className = 'toast glass'; t.style.whiteSpace = 'nowrap';
+  t.innerHTML = `<span>${esc(msg)}</span><button style="margin-left:14px;font-weight:600;text-decoration:underline">Undo</button>`;
+  $('button', t).onclick = () => { t.remove(); fn(); };
+  document.body.appendChild(t); setTimeout(() => t.remove(), 9000);
+}
+function restoreNote(id){
+  const i = data.trash.findIndex(t => t.n.id === id); if (i < 0) return false;
+  const [t] = data.trash.splice(i, 1);
+  if (t.n.gid && !data.groups.some(g => g.id === t.n.gid)) t.n.gid = '';
+  data.notes.push(t.n); save(); renderApp(); return true;
+}
+function openTrash(){
+  const v = document.createElement('div');
+  v.className = 'veil mid';
+  const draw = () => {
+    v.innerHTML = `<div class="sheet glass"><h3 style="font:italic 1.4rem var(--serif)">Recently deleted</h3>
+      <p class="hint" style="margin:0">Notes stay here for 30 days, then are removed for good.</p>
+      ${data.trash.length ? data.trash.map(t => `<div class="row" style="flex-wrap:nowrap;justify-content:space-between;border-top:1px solid var(--line);padding-top:10px">
+          <div style="min-width:0"><div style="font:italic 1.05rem var(--serif);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.n.lock ? 'Locked note' : esc(t.n.title || 'Untitled')}</div>
+          <div class="hint" style="margin:0">Deleted ${new Date(t.at).toLocaleDateString()}</div></div>
+          <div class="row" style="flex-wrap:nowrap;flex:none"><button class="chip" data-r="${t.n.id}">Restore</button><button class="chip danger" data-d="${t.n.id}">Delete</button></div></div>`).join('')
+        : '<p class="empty" style="margin:12px 0">Nothing deleted recently.</p>'}
+      <button class="btn solid" id="dn">Done</button></div>`;
+    v.querySelectorAll('[data-r]').forEach(b => b.onclick = () => { restoreNote(b.dataset.r); toast('Note restored'); draw(); });
+    v.querySelectorAll('[data-d]').forEach(b => b.onclick = () => {
+      if (!confirm('Delete this note forever? This cannot be undone.')) return;
+      data.trash = data.trash.filter(t => t.n.id !== b.dataset.d); save(); draw();
+    });
+    $('#dn', v).onclick = () => v.remove();
+  };
+  v.onclick = e => { if (e.target === v) v.remove(); };
+  draw(); document.body.appendChild(v);
+}
+function setTheme(t){ document.body.dataset.theme = t; store.set('gn:theme', t); }
+
+function openProfile(){
+  const v = document.createElement('div');
+  v.className = 'veil mid';
+  const draw = () => {
+    const cur = document.body.dataset.theme || 'gold';
+    v.innerHTML = `<div class="sheet glass">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="avatar glass"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="8.5" r="3.6"/><path d="M4.8 20c.9-3.6 3.7-5.4 7.2-5.4s6.3 1.8 7.2 5.4"/></svg></div>
+        <div><div style="font:italic 1.3rem var(--serif)">${esc(user.name || '')}</div>
+        <div class="hint" style="margin:0">${esc(user.email || 'Guest account')}</div></div>
+      </div>
+      <h3 style="font:italic 1.25rem var(--serif);margin-top:8px">Appearance</h3>
+      <div class="themes">${THEMES.map(t => `<button class="theme ${cur === t.id ? 'on' : ''}" data-t="${t.id}"><span class="sw" style="background:${t.sw}"></span>${t.name}</button>`).join('')}</div>
+      <button class="btn" id="tr">Recently deleted (${data.trash.length})</button>
+      <div class="row"><button class="btn" id="so">Sign out</button><button class="btn solid" id="dn">Done</button></div>
+    </div>`;
+    v.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { setTheme(b.dataset.t); draw(); });
+    $('#dn', v).onclick = () => v.remove();
+    $('#tr', v).onclick = () => { v.remove(); openTrash(); };
+    $('#so', v).onclick = () => { v.remove(); logout(); };
+  };
+  v.onclick = e => { if (e.target === v) v.remove(); };
+  draw(); document.body.appendChild(v);
+}
+
+async function openNote(id){
+  const n = data.notes.find(x => x.id === id); if (!n) return;
+  if (!n.lock) return openEditor({ id, title: n.title, body: n.body, gid: n.gid, locked: false, pw: null });
+  const pw = await ask('Enter password', { password: true, ok: 'Unlock' });
+  if (pw === null) return;
+  try {
+    const c = await unlockText(n.lock, pw);
+    openEditor({ id, title: c.title, body: c.body, gid: n.gid, locked: true, pw });
+  } catch(e){ toast('Wrong password'); }
+}
+
+function openEditor(ed){
+  const v = document.createElement('div');
+  v.className = 'veil full';
+  const orig = { t: ed.title, b: ed.body, g: ed.gid, l: ed.locked };
+  let rec = null, caretS = null, caretE = null, vlang = store.get('gn:vlang') || 'en-US';
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const draw = () => {
+    if (rec) { try { rec.abort(); } catch(e){} rec = null; }
+    v.innerHTML = `<div class="sheet glass">
+      <div class="row" style="justify-content:space-between;flex-wrap:nowrap">
+        <button class="chip" id="cx" aria-label="Save and go back" style="display:grid;place-items:center;width:42px;height:42px;padding:0;border-radius:50%"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m11 6-6 6 6 6"/></svg></button>
+        <select id="gr" style="width:auto;max-width:55%;padding:8px 12px"><option value="">No group</option>${data.groups.map(x => `<option value="${x.id}" ${x.id===ed.gid?'selected':''}>${esc(x.name)}</option>`).join('')}</select>
+      </div>
+      <input class="t" id="ti" placeholder="Title" value="${esc(ed.title)}">
+      <textarea id="bo" placeholder="Write here...">${esc(ed.body)}</textarea>
+      <div class="vrow">
+        <button class="chip" id="mic"><span class="mic-dot">●</span> <span id="ml">Voice typing</span></button>
+        <button class="chip" id="vl">${vlang === 'en-US' ? 'English' : 'বাংলা'}</button>
+      </div>
+      <div class="row" style="flex-wrap:nowrap">
+        <button class="chip ${ed.locked?'on':''}" id="lk">${ed.locked ? 'Locked · remove' : 'Lock note'}</button>
+        ${ed.id ? '<button class="chip danger" id="rm">Delete</button>' : ''}
+        <button class="btn solid" id="sv" style="margin-left:auto;flex:0 0 auto;width:auto;padding:11px 26px">Save note</button>
+      </div>
+    </div>`;
+    const sh = $('.sheet', v), bo = $('#bo', v);
+    // tapping any empty area puts the cursor at the end of the text
+    sh.onclick = e => { if (e.target === sh) { bo.focus(); bo.setSelectionRange(bo.value.length, bo.value.length); } };
+    if (!ed.id && !ed.title && !ed.body) $('#ti', v).focus();
+    bo.onblur = () => { caretS = bo.selectionStart; caretE = bo.selectionEnd; };
+    const mic = $('#mic', v), ml = $('#ml', v), vl = $('#vl', v);
+    vl.onclick = () => {
+      vlang = vlang === 'en-US' ? 'bn-BD' : 'en-US'; store.set('gn:vlang', vlang);
+      vl.textContent = vlang === 'en-US' ? 'English' : 'বাংলা';
+      if (rec) rec.stop();
+    };
+    mic.onclick = () => {
+      if (rec) { rec.stop(); return; }
+      if (!SR) return toast('Voice typing needs Chrome or Edge, with internet.');
+      const s0 = caretS ?? bo.value.length, e0 = caretE ?? s0;
+      let before = bo.value.slice(0, s0); const after = bo.value.slice(e0);
+      const sep = t => (before && !/\s$/.test(before) ? ' ' : '') + t;
+      const r = new SR(); r.lang = vlang; r.continuous = true; r.interimResults = true;
+      r.onresult = ev => {
+        let interim = '';
+        for (let i = ev.resultIndex; i < ev.results.length; i++) {
+          const t = ev.results[i][0].transcript.trim();
+          if (ev.results[i].isFinal) before += sep(t); else interim += t + ' ';
+        }
+        const ins = interim.trim() ? sep(interim.trim()) : '';
+        bo.value = before + ins + after;
+        caretS = caretE = before.length;
+        bo.scrollTop = bo.scrollHeight;
+      };
+      r.onerror = ev => toast(ev.error === 'not-allowed' ? 'Microphone is blocked. Allow it from the address bar.'
+        : ev.error === 'no-speech' ? 'Did not hear anything. Try again.'
+        : ev.error === 'network' ? 'Voice typing needs an internet connection.' : 'Voice typing stopped.');
+      r.onend = () => { rec = null; mic.classList.remove('on'); ml.textContent = 'Voice typing'; };
+      rec = r; r.start(); mic.classList.add('on'); ml.textContent = 'Listening… tap to stop';
+    };
+    const keep = () => { ed.title = $('#ti', v).value; ed.body = $('#bo', v).value; ed.gid = $('#gr', v).value; };
+    
+    $('#lk', v).onclick = async () => {
+      keep();
+      if (ed.locked) { ed.locked = false; ed.pw = null; draw(); return; }
+      const p1 = await ask('Choose a password', { password: true, ok: 'Next' }); if (!p1) return;
+      const p2 = await ask('Type it again', { password: true, ok: 'Lock' }); if (p2 === null) return;
+      if (p1 !== p2) return toast('Passwords did not match');
+      ed.locked = true; ed.pw = p1; draw();
+      toast('If you forget this password, the note cannot be opened.');
+    };
+    const rm = $('#rm', v);
+    if (rm) rm.onclick = () => {
+      const i = data.notes.findIndex(x => x.id === ed.id); if (i < 0) return;
+      const [n] = data.notes.splice(i, 1);
+      data.trash.unshift({ n, at: Date.now() }); save();
+      if (rec) rec.abort();
+      v.remove(); renderApp();
+      toastUndo('Note deleted', () => restoreNote(n.id));
+    };
+    // saves the note; returns true (saved), 'skip' (nothing to save) or false (failed)
+    const commit = async quiet => {
+      keep();
+      if (!ed.title.trim() && !ed.body.trim()) { if (quiet) return 'skip'; toast('Write something first'); return false; }
+      if (ed.id && ed.title === orig.t && ed.body === orig.b && ed.gid === orig.g && ed.locked === orig.l) return 'skip';
+      const item = { id: ed.id || uid(), gid: ed.gid, ts: Date.now(), title: '', body: '', lock: null };
+      if (ed.locked) {
+        try { item.lock = await lockText({ title: ed.title, body: ed.body }, ed.pw); }
+        catch(e){ toast('Locking needs a secure page (https or a local file in Chrome).'); return false; }
+      } else { item.title = ed.title.trim(); item.body = ed.body; }
+      const i = data.notes.findIndex(x => x.id === item.id);
+      if (i >= 0) data.notes[i] = item; else data.notes.push(item);
+      save(); return true;
+    };
+    $('#cx', v).onclick = async () => {
+      if (rec) rec.abort();
+      const r = await commit(true);
+      if (!r) return;
+      v.remove(); renderApp(); if (r === true) toast('Saved');
+    };
+    $('#sv', v).onclick = async () => {
+      if (rec) rec.abort();
+      const r = await commit(false);
+      if (!r) return;
+      v.remove(); renderApp(); if (r === true) toast('Saved');
+    };
+  };
+  draw(); document.body.appendChild(v);
+}
+
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+// ---- start ----
+document.body.dataset.theme = store.get('gn:theme') || 'gold';
+const s = store.get('gn:session');
+if (s) login(s); else renderAuth();
+</script>
+</body>
+</html>
